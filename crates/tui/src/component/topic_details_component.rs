@@ -1,5 +1,6 @@
 //! Component showing information regarding a given topic: partitions, consumer groups, replicas ...
 use std::collections::HashSet;
+use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -28,6 +29,7 @@ pub(crate) struct TopicDetailsComponent {
     state: TableState,
     refreshing_data: bool,
     throbber_state: throbber_widgets_tui::ThrobberState,
+    last_g_key: Option<Instant>,
 }
 
 impl WithHeight for TopicDetailsComponent {
@@ -52,17 +54,36 @@ impl Component for TopicDetailsComponent {
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.next();
+                self.last_g_key = None;
                 //self.scroll.scroll_to_next_line();
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.previous();
+                self.last_g_key = None;
                 //self.scroll.scroll_to_previous_line();
+            }
+            KeyCode::Char('g') => {
+                if let Some(last_g) = self.last_g_key {
+                    if last_g.elapsed().as_millis() < 500 {
+                        // Double 'g' pressed - go to first
+                        self.first();
+                        self.last_g_key = None;
+                        return Ok(None);
+                    }
+                }
+                self.last_g_key = Some(Instant::now());
+            }
+            KeyCode::Char('G') => {
+                self.last();
+                self.last_g_key = None;
             }
             KeyCode::Char('[') => {
                 self.first();
+                self.last_g_key = None;
             }
             KeyCode::Char(']') => {
                 self.last();
+                self.last_g_key = None;
             }
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let mut h = HashSet::default();
@@ -81,8 +102,11 @@ impl Component for TopicDetailsComponent {
                     .unwrap()
                     .send(Action::RequestTopicDetails(h))
                     .unwrap();
+                self.last_g_key = None;
             }
-            _ => (),
+            _ => {
+                self.last_g_key = None;
+            }
         }
         Ok(None)
     }

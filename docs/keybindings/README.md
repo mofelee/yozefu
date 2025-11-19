@@ -17,6 +17,8 @@ The choices I made are completely personal. I use a qwerty Apple keyboard for yo
 | <kbd>]</kbd>                      | Scroll to bottom                       |
 | <kbd>J</kbd>                      | Move to downward direction by one line |
 | <kbd>K</kbd>                      | Move to upward direction by one line   |
+| <kbd>gg</kbd>                     | Move to top (vim style)                |
+| <kbd>G</kbd>                      | Move to bottom (vim style)             |
 
 
 <br />

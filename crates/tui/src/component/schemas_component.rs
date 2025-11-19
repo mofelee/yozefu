@@ -19,6 +19,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap},
 };
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{Component, ComponentName, Shortcut, State, scroll_state::ScrollState};
@@ -31,12 +32,14 @@ pub(crate) struct SchemasComponent<'a> {
     action_tx: Option<UnboundedSender<Action>>,
     scroll: ScrollState,
     highlighter: Highlighter,
+    last_g_key: Option<Instant>,
 }
 
 impl SchemasComponent<'_> {
     pub fn new(highlighter: Highlighter) -> Self {
         Self {
             highlighter,
+            last_g_key: None,
             ..Self::default()
         }
     }
@@ -129,15 +132,34 @@ impl Component for SchemasComponent<'_> {
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.scroll.scroll_to_next_line();
+                self.last_g_key = None;
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.scroll.scroll_to_previous_line();
+                self.last_g_key = None;
+            }
+            KeyCode::Char('g') => {
+                if let Some(last_g) = self.last_g_key {
+                    if last_g.elapsed().as_millis() < 500 {
+                        // Double 'g' pressed - go to top
+                        self.scroll.scroll_to_top();
+                        self.last_g_key = None;
+                        return Ok(None);
+                    }
+                }
+                self.last_g_key = Some(Instant::now());
+            }
+            KeyCode::Char('G') => {
+                self.scroll.scroll_to_bottom();
+                self.last_g_key = None;
             }
             KeyCode::Char('[') => {
                 self.scroll.scroll_to_top();
+                self.last_g_key = None;
             }
             KeyCode::Char(']') => {
                 self.scroll.scroll_to_bottom();
+                self.last_g_key = None;
             }
             KeyCode::Char('c') => {
                 let exported_schemas = ExportedSchemasDetails {
@@ -151,8 +173,11 @@ impl Component for SchemasComponent<'_> {
                         serde_json::to_string_pretty(&exported_schemas)
                             .expect("Unable to serialize schemas"),
                     ))?;
+                self.last_g_key = None;
             }
-            _ => (),
+            _ => {
+                self.last_g_key = None;
+            }
         }
         Ok(None)
     }

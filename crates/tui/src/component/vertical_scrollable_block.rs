@@ -5,6 +5,7 @@ use ratatui::{
     layout::{Margin, Rect},
     widgets::{Block, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{action::Action, error::TuiError, tui::Event};
@@ -17,6 +18,7 @@ pub(crate) struct VerticalScrollableBlock<C> {
     scroll_length: u16,
     scrollbar_state: ScrollbarState,
     component: C,
+    last_g_key: Option<Instant>,
 }
 
 impl<C> VerticalScrollableBlock<C>
@@ -30,6 +32,7 @@ where
             scroll_length: 10,
             scrollbar_state: ScrollbarState::new(component.content_height()),
             component,
+            last_g_key: None,
         }
     }
 }
@@ -71,17 +74,37 @@ where
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.scroll = (self.scroll + 1).min(self.scroll_length);
+                self.last_g_key = None;
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.scroll = self.scroll.saturating_sub(1);
+                self.last_g_key = None;
+            }
+            KeyCode::Char('g') => {
+                if let Some(last_g) = self.last_g_key {
+                    if last_g.elapsed().as_millis() < 500 {
+                        // Double 'g' pressed - go to top
+                        self.scroll = 0;
+                        self.last_g_key = None;
+                        return Ok(None);
+                    }
+                }
+                self.last_g_key = Some(Instant::now());
+            }
+            KeyCode::Char('G') => {
+                self.scroll = self.scroll_length;
+                self.last_g_key = None;
             }
             KeyCode::Char('[') => {
                 self.scroll = 0;
+                self.last_g_key = None;
             }
             KeyCode::Char(']') => {
                 self.scroll = self.scroll_length;
+                self.last_g_key = None;
             }
             _ => {
+                self.last_g_key = None;
                 self.component.handle_key_events(key)?;
             }
         }

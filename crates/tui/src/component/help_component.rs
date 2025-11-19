@@ -10,6 +10,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wrap},
 };
+use std::time::Instant;
 
 use crate::{Action, error::TuiError, records_buffer::BUFFER_SIZE};
 
@@ -28,6 +29,7 @@ const REPOSITORY_URL: &str = concat!(
 pub(crate) struct HelpComponent {
     scroll: ScrollState,
     rendered: usize,
+    last_g_key: Option<Instant>,
 }
 
 impl HelpComponent {
@@ -60,17 +62,38 @@ impl Component for HelpComponent {
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => {
                 self.scroll.scroll_to_next_line();
+                self.last_g_key = None;
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 self.scroll.scroll_to_previous_line();
+                self.last_g_key = None;
+            }
+            KeyCode::Char('g') => {
+                if let Some(last_g) = self.last_g_key {
+                    if last_g.elapsed().as_millis() < 500 {
+                        // Double 'g' pressed - go to top
+                        self.scroll.scroll_to_top();
+                        self.last_g_key = None;
+                        return Ok(None);
+                    }
+                }
+                self.last_g_key = Some(Instant::now());
+            }
+            KeyCode::Char('G') => {
+                self.scroll.scroll_to_bottom();
+                self.last_g_key = None;
             }
             KeyCode::Char('[') => {
                 self.scroll.scroll_to_top();
+                self.last_g_key = None;
             }
             KeyCode::Char(']') => {
                 self.scroll.scroll_to_bottom();
+                self.last_g_key = None;
             }
-            _ => (),
+            _ => {
+                self.last_g_key = None;
+            }
         }
         Ok(None)
     }

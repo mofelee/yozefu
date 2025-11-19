@@ -14,6 +14,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap},
 };
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{Component, ComponentName, Shortcut, State, scroll_state::ScrollState, styles};
@@ -28,12 +29,14 @@ pub(crate) struct RecordDetailsComponent<'a> {
     theme: Option<Theme>,
     action_tx: Option<UnboundedSender<Action>>,
     highlighter: Highlighter,
+    last_g_key: Option<Instant>,
 }
 
 impl<'a> RecordDetailsComponent<'a> {
     pub fn new(highlighter: Highlighter) -> Self {
         Self {
             highlighter,
+            last_g_key: None,
             ..Default::default()
         }
     }
@@ -195,15 +198,34 @@ impl Component for RecordDetailsComponent<'_> {
         match key.code {
             KeyCode::Char('j') => {
                 self.scroll.scroll_to_next_line();
+                self.last_g_key = None;
             }
             KeyCode::Char('k') => {
                 self.scroll.scroll_to_previous_line();
+                self.last_g_key = None;
+            }
+            KeyCode::Char('g') => {
+                if let Some(last_g) = self.last_g_key {
+                    if last_g.elapsed().as_millis() < 500 {
+                        // Double 'g' pressed - go to top
+                        self.scroll.scroll_to_top();
+                        self.last_g_key = None;
+                        return Ok(None);
+                    }
+                }
+                self.last_g_key = Some(Instant::now());
+            }
+            KeyCode::Char('G') => {
+                self.scroll.scroll_to_bottom();
+                self.last_g_key = None;
             }
             KeyCode::Char('[') => {
                 self.scroll.scroll_to_top();
+                self.last_g_key = None;
             }
             KeyCode::Char(']') => {
                 self.scroll.scroll_to_bottom();
+                self.last_g_key = None;
             }
             KeyCode::Char('o') => {
                 if let Some(record) = &self.record {
@@ -212,8 +234,12 @@ impl Component for RecordDetailsComponent<'_> {
                         .unwrap()
                         .send(Action::Open(record.clone()))?;
                 }
+                self.last_g_key = None;
             }
-            KeyCode::Char('s') => self.show_schema()?,
+            KeyCode::Char('s') => {
+                self.show_schema()?;
+                self.last_g_key = None;
+            }
             KeyCode::Char('c') => {
                 if let Some(record) = &self.record {
                     let mut exported_record: ExportedKafkaRecord = record.into();
@@ -226,6 +252,7 @@ impl Component for RecordDetailsComponent<'_> {
                                 .expect("Unable to serialize record as json for the clipboard"),
                         ))?;
                 }
+                self.last_g_key = None;
             }
             KeyCode::Char('e') => {
                 if let Some(record) = &self.record {
@@ -234,8 +261,11 @@ impl Component for RecordDetailsComponent<'_> {
                         .unwrap()
                         .send(Action::Export(record.clone()))?;
                 }
+                self.last_g_key = None;
             }
-            _ => (),
+            _ => {
+                self.last_g_key = None;
+            }
         }
         Ok(None)
     }
